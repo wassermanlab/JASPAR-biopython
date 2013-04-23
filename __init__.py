@@ -82,9 +82,8 @@ def parse(handle, format):
         return record
     elif format in ('pfm', 'sites'):
         from Bio_dev.motifs import jaspar
-        motif = jaspar.read(handle, format)
-        motifs = [motif]
-        return motifs
+        record = jaspar.read(handle, format)
+        return record
     else:
         raise ValueError("Unknown format %s" % format)
 

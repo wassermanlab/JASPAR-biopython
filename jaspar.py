@@ -4,7 +4,8 @@ from math import sqrt
 import re
 
 import sys
-sys.path.append("/homed/home/dave/devel/biopython-1.61")
+#sys.path.append("/homed/home/dave/devel/biopython-1.61")
+sys.path.append("/home/anthony/PostDoc/JASPAR2013/Biopython_package/biopython-master/")
 from Bio_dev import motifs
 
 
@@ -93,6 +94,25 @@ class Motif(motifs.Motif):
         return self.matrix_id.__hash__()
 
 
+class Record(list):
+    """
+    Represents a list of jaspar motifs
+
+    Attribute:
+        o version: The JASPAR version used
+
+    """
+
+    def __init__(self):
+        self.version = None
+
+    def __str__(self):
+        return "\n".join([the_motif.__str__() for the_motif in self])
+
+
+# Method too complex (mccabe 15)
+# TODO simplify the code by factorizing it
+# TODO write the docstring
 def read(handle, format):
     alphabet = dna
     counts = {}
@@ -109,7 +129,9 @@ def read(handle, format):
             matrix_id=None, name=None, alphabet=alphabet, counts=counts
         )
         motif.mask = "*" * motif.length
-        return motif
+        record = Record()
+        record.append(motif)
+        return record
     elif format == "sites":
         # reads the motif from Jaspar .sites file
         instances = []
@@ -125,14 +147,17 @@ def read(handle, format):
                     instance += c
             instance = Seq(instance, alphabet)
             instances.append(instance)
+        # TODO Check if the following works since motifs is not defined before
         instances = motifs.Instances(instances, alphabet)
         motif = Motif(
             matrix_id=None, name=None, alphabet=alphabet, instances=instances
         )
         motif.mask = "*" * motif.length
-        return motif
+        record = Record()
+        record.append(motif)
+        return record
     elif format == "jaspar":
-        motifs = []
+        record = Record()
 
         head_pat = re.compile(r"^>\s*(\S+)\s+(\S+)")
         row_pat = re.compile(r"\s*([ACGT])\s*\[\s*(.*)\s*\]")
@@ -144,7 +169,7 @@ def read(handle, format):
             line.rstrip('\r\n')
 
             head_match = head_pat.match(line)
-            row_match  = row_pat.match(line)
+            row_match = row_pat.match(line)
 
             if head_match:
                 (id, name) = head_match.group(1, 2)
@@ -158,16 +183,16 @@ def read(handle, format):
                 row_count += 1
 
                 if row_count == 4:
-                    motifs.append(
+                    record.append(
                         Motif(id, name, alphabet=alphabet, counts=counts)
                     )
-                    
+
                     id = None
                     name = None
                     counts = {}
                     row_count = 0
 
-        return motifs
+        return record
     else:
         raise ValueError("Unknown format %s" % format)
 
