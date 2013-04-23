@@ -13,6 +13,9 @@ and MAST programs, as well as files in the TRANSFAC format.
 Bio.motifs is replacing the older and now obsolete Bio.Motif module.
 """
 
+import sys
+sys.path.append("/homed/home/dave/devel/biopython-1.61")
+
 
 def create(instances, alphabet=None):
     instances = Instances(instances, alphabet)
@@ -29,6 +32,7 @@ def parse(handle, format):
      - TRANSFAC:      TRANSFAC database file format
      - pfm:           JASPAR-style position-frequency matrix
      - sites:         JASPAR-style sites file
+     - jaspar:        JASPAR file format containing multiple PFMs
     As files in the pfm and sites formats contain only a single motif,
     it is easier to use Bio.motifs.read() instead of Bio.motifs.parse()
     for those.
@@ -72,8 +76,12 @@ def parse(handle, format):
         from Bio.motifs import transfac
         record = transfac.read(handle)
         return record
+    elif format=="jaspar":
+        from Bio_dev.motifs import jaspar
+        record = jaspar.read(handle, format)
+        return record
     elif format in ('pfm', 'sites'):
-        from Bio.motifs import jaspar
+        from Bio_dev.motifs import jaspar
         motif = jaspar.read(handle, format)
         motifs = [motif]
         return motifs
