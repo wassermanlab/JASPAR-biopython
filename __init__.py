@@ -76,11 +76,7 @@ def parse(handle, format):
         from Bio.motifs import transfac
         record = transfac.read(handle)
         return record
-    elif format=="jaspar":
-        from Bio_dev.motifs import jaspar
-        record = jaspar.read(handle, format)
-        return record
-    elif format in ('pfm', 'sites'):
+    elif format in ('pfm', 'sites', 'jaspar'):
         from Bio_dev.motifs import jaspar
         record = jaspar.read(handle, format)
         return record
