@@ -25,15 +25,15 @@ class Motif(motifs.Motif):
         Construct a JASPAR Motif instance.
 
         """
-        motifs.Motif.__init__(self, alphabet, counts=counts)
+        motifs.Motif.__init__(self, alphabet, instances, counts)
         self.name = name
         self.matrix_id = matrix_id
         # We assume a uniform distribution of the nt in the background
-        self.background = dict.fromkeys(dna.letters, 0.25)
+        self.background = dict.fromkeys(alphabet.letters, 0.25)
         # Number of sequences used to make the counts
-        nb_seq = sum([counts[nt][0] for nt in dna.letters])
+        nb_seq = sum([self.counts[nt][0] for nt in alphabet.letters])
         self.pseudocounts = dict(
-            (nt, self.background[nt] * sqrt(nb_seq)) for nt in dna.letters)
+            (nt, self.background[nt] * sqrt(nb_seq)) for nt in alphabet.letters)
         self.tf_class = tf_class
         self.tf_family = tf_family
         self.species = species  # May have multiple so species is a list
@@ -110,88 +110,21 @@ class Record(list):
         return "\n".join([the_motif.__str__() for the_motif in self])
 
 
-# Method too complex (mccabe 15)
-# TODO simplify the code by factorizing it
-# TODO write the docstring
 def read(handle, format):
-    alphabet = dna
-    counts = {}
+    """
+    Read motif(s) from a file in one of several different JASPAR formats.
+    Call the appropriate routine based on the format passed.
+    """
+
+    format = format.lower()
     if format == "pfm":
-        # reads the motif from Jaspar .pfm file
-        letters = "ACGT"
-        for letter, line in zip(letters, handle):
-            words = line.split()
-            #if there is a letter in the beginning, ignore it
-            if words[0] == letter:
-                words = words[1:]
-            counts[letter] = map(float, words)
-        motif = Motif(
-            matrix_id=None, name=None, alphabet=alphabet, counts=counts
-        )
-        motif.mask = "*" * motif.length
-        record = Record()
-        record.append(motif)
+        record = _read_pfm(handle)
         return record
     elif format == "sites":
-        # reads the motif from Jaspar .sites file
-        instances = []
-        for line in handle:
-            if not line.startswith(">"):
-                break
-            # line contains the header ">...."
-            # now read the actual sequence
-            line = handle.next()
-            instance = ""
-            for c in line.strip():
-                if c == c.upper():
-                    instance += c
-            instance = Seq(instance, alphabet)
-            instances.append(instance)
-        # TODO Check if the following works since motifs is not defined before
-        instances = motifs.Instances(instances, alphabet)
-        motif = Motif(
-            matrix_id=None, name=None, alphabet=alphabet, instances=instances
-        )
-        motif.mask = "*" * motif.length
-        record = Record()
-        record.append(motif)
+        record = _read_sites(handle)
         return record
     elif format == "jaspar":
-        record = Record()
-
-        head_pat = re.compile(r"^>\s*(\S+)\s+(\S+)")
-        row_pat = re.compile(r"\s*([ACGT])\s*\[\s*(.*)\s*\]")
-
-        id = None
-        name = None
-        row_count = 0
-        for line in handle:
-            line.rstrip('\r\n')
-
-            head_match = head_pat.match(line)
-            row_match = row_pat.match(line)
-
-            if head_match:
-                (id, name) = head_match.group(1, 2)
-            elif row_match:
-                (letter, counts_str) = row_match.group(1, 2)
-
-                words = counts_str.split()
-
-                counts[letter] = map(float, words)
-
-                row_count += 1
-
-                if row_count == 4:
-                    record.append(
-                        Motif(id, name, alphabet=alphabet, counts=counts)
-                    )
-
-                    id = None
-                    name = None
-                    counts = {}
-                    row_count = 0
-
+        record = _read_jaspar(handle)
         return record
     else:
         raise ValueError("Unknown format %s" % format)
@@ -210,3 +143,108 @@ def write(motif):
     # Finished; glue the lines together
     text = "".join(lines)
     return text
+
+def _read_pfm(handle):
+    """
+    Reads the motif from a JASPAR .pfm file
+    """
+
+    alphabet = dna
+    counts = {}
+
+    letters = "ACGT"
+    for letter, line in zip(letters, handle):
+        words = line.split()
+        #if there is a letter in the beginning, ignore it
+        if words[0] == letter:
+            words = words[1:]
+        counts[letter] = map(float, words)
+
+    motif = Motif(matrix_id=None, name=None, alphabet=alphabet, counts=counts)
+    motif.mask = "*" * motif.length
+    record = Record()
+    record.append(motif)
+
+    return record
+
+def _read_sites(handle):
+    """
+    Reads the motif from JASPAR .sites file
+    """
+
+    alphabet = dna
+    instances = []
+
+    for line in handle:
+        if not line.startswith(">"):
+            break
+        # line contains the header ">...."
+        # now read the actual sequence
+        line = handle.next()
+        instance = ""
+        for c in line.strip():
+            if c == c.upper():
+                instance += c
+        instance = Seq(instance, alphabet)
+        instances.append(instance)
+
+    instances = motifs.Instances(instances, alphabet)
+    motif = Motif(
+        matrix_id=None, name=None, alphabet=alphabet, instances=instances
+    )
+    motif.mask = "*" * motif.length
+    record = Record()
+    record.append(motif)
+
+    return record
+
+def _read_jaspar(handle):
+    """
+    Read motifs from a JASPAR formatted file
+    
+    Format is one or more records of the form, e.g.:
+    >MA0001.1 AGL3
+    A  [ 0  3 79 40 66 48 65 11 65  0 ]
+    C  [94 75  4  3  1  2  5  2  3  3 ]
+    G  [ 1  0  3  4  1  0  5  3 28 88 ]
+    T  [ 2 19 11 50 29 47 22 81  1  6 ]
+
+    """
+
+    alphabet = dna
+    counts = {}
+
+    record = Record()
+
+    head_pat = re.compile(r"^>\s*(\S+)\s+(\S+)")
+    row_pat = re.compile(r"\s*([ACGT])\s*\[\s*(.*)\s*\]")
+
+    id = None
+    name = None
+    row_count = 0
+    for line in handle:
+        line.rstrip('\r\n')
+
+        head_match = head_pat.match(line)
+        row_match = row_pat.match(line)
+
+        if head_match:
+            (id, name) = head_match.group(1, 2)
+        elif row_match:
+            (letter, counts_str) = row_match.group(1, 2)
+
+            words = counts_str.split()
+
+            counts[letter] = map(float, words)
+
+            row_count += 1
+
+            if row_count == 4:
+                record.append(Motif(id, name, alphabet=alphabet, counts=counts))
+
+                id = None
+                name = None
+                counts = {}
+                row_count = 0
+
+    return record
