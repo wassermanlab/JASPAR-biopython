@@ -1,31 +1,38 @@
-from Bio_dev.motifs import Motif, Instances
-from Bio_dev.Alphabet.IUPAC import unambiguous_dna as dna
-from Bio_dev.Seq import Seq
+from Bio.Seq import Seq
+from Bio.Alphabet.IUPAC import unambiguous_dna as dna
 from math import sqrt
+import re
+
+import sys
+sys.path.append("/homed/home/dave/devel/biopython-1.61")
+from Bio_dev import motifs
 
 
-class JASPAR_PROFILE(Motif):
+class Motif(motifs.Motif):
     """
-    Represents a JASPAR profile as a motif with the metadata information if
-    available
+    A subclass of Motif used in parsing JASPAR files.
+
+    Represents a JASPAR profile as a Motif with additional metadata information
+    if available
 
     """
-    def __init__(self, name, matrix_id, counts, tf_class=None, tf_family=None,
-                 species=None, tax_group=None, acc=None, data_type=None,
-                 medline=None, pazar_id=None, comment=None):
+    def __init__(self, matrix_id, name, alphabet=dna, instances=None,
+                 counts=None, tf_class=None, tf_family=None, species=None,
+                 tax_group=None, acc=None, data_type=None, medline=None,
+                 pazar_id=None, comment=None):
         """
-        Construct a JASPAR profile instance.
+        Construct a JASPAR Motif instance.
 
         """
-        Motif.__init__(self, dna, counts=counts)
+        motifs.Motif.__init__(self, alphabet, counts=counts)
         self.name = name
+        self.matrix_id = matrix_id
         # We assume a uniform distribution of the nt in the background
         self.background = dict.fromkeys(dna.letters, 0.25)
         # Number of sequences used to make the counts
         nb_seq = sum([counts[nt][0] for nt in dna.letters])
         self.pseudocounts = dict(
             (nt, self.background[nt] * sqrt(nb_seq)) for nt in dna.letters)
-        self.matrix_id = matrix_id
         self.tf_class = tf_class
         self.tf_family = tf_family
         self.species = species  # May have multiple so species is a list
@@ -98,7 +105,11 @@ def read(handle, format):
             if words[0] == letter:
                 words = words[1:]
             counts[letter] = map(float, words)
-        motif = Motif(alphabet, counts=counts)
+        motif = Motif(
+            matrix_id=None, name=None, alphabet=alphabet, counts=counts
+        )
+        motif.mask = "*" * motif.length
+        return motif
     elif format == "sites":
         # reads the motif from Jaspar .sites file
         instances = []
@@ -114,12 +125,51 @@ def read(handle, format):
                     instance += c
             instance = Seq(instance, alphabet)
             instances.append(instance)
-        instances = Instances(instances, alphabet)
-        motif = Motif(alphabet, instances=instances)
+        instances = motifs.Instances(instances, alphabet)
+        motif = Motif(
+            matrix_id=None, name=None, alphabet=alphabet, instances=instances
+        )
+        motif.mask = "*" * motif.length
+        return motif
+    elif format == "jaspar":
+        motifs = []
+
+        head_pat = re.compile(r"^>\s*(\S+)\s+(\S+)")
+        row_pat = re.compile(r"\s*([ACGT])\s*\[\s*(.*)\s*\]")
+
+        id = None
+        name = None
+        row_count = 0
+        for line in handle:
+            line.rstrip('\r\n')
+
+            head_match = head_pat.match(line)
+            row_match  = row_pat.match(line)
+
+            if head_match:
+                (id, name) = head_match.group(1, 2)
+            elif row_match:
+                (letter, counts_str) = row_match.group(1, 2)
+
+                words = counts_str.split()
+
+                counts[letter] = map(float, words)
+
+                row_count += 1
+
+                if row_count == 4:
+                    motifs.append(
+                        Motif(id, name, alphabet=alphabet, counts=counts)
+                    )
+                    
+                    id = None
+                    name = None
+                    counts = {}
+                    row_count = 0
+
+        return motifs
     else:
         raise ValueError("Unknown format %s" % format)
-    motif.mask = "*" * motif.length
-    return motif
 
 
 def write(motif):
