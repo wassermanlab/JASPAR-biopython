@@ -4,8 +4,8 @@ from math import sqrt
 import re
 
 import sys
-#sys.path.append("/homed/home/dave/devel/biopython-1.61")
-sys.path.append("/home/anthony/PostDoc/JASPAR2013/Biopython_package/biopython-master/")
+sys.path.append("/homed/home/dave/devel/biopython-1.61")
+#sys.path.append("/home/anthony/PostDoc/JASPAR2013/Biopython_package/biopython-master/")
 from Bio_dev import motifs
 
 
@@ -18,15 +18,18 @@ class Motif(motifs.Motif):
 
     """
     def __init__(self, matrix_id, name, alphabet=dna, instances=None,
-                 counts=None, tf_class=None, tf_family=None, species=None,
-                 tax_group=None, acc=None, data_type=None, medline=None,
-                 pazar_id=None, comment=None):
+                 counts=None, collection=None, tf_class=None, tf_family=None,
+                 species=None, tax_group=None, acc=None, data_type=None,
+                 medline=None, pazar_id=None, comment=None):
         """
         Construct a JASPAR Motif instance.
 
         """
         motifs.Motif.__init__(self, alphabet, instances, counts)
         self.name = name
+        # TODO we may want to store the base ID and version in separate
+        # attributes or just provide methods to split/return the matrix ID
+        # into base_id and version
         self.matrix_id = matrix_id
         # We assume a uniform distribution of the nt in the background
         self.background = dict.fromkeys(alphabet.letters, 0.25)
@@ -34,11 +37,14 @@ class Motif(motifs.Motif):
         nb_seq = sum([self.counts[nt][0] for nt in alphabet.letters])
         self.pseudocounts = dict(
             (nt, self.background[nt] * sqrt(nb_seq)) for nt in alphabet.letters)
+        self.collection = collection
         self.tf_class = tf_class
         self.tf_family = tf_family
-        self.species = species  # May have multiple so species is a list
+        self.species = species      # May have multiple so species is a list.
+                                    # The species are actually specified as
+                                    # taxonomy IDs.
         self.tax_group = tax_group
-        self.acc = acc
+        self.acc = acc              # May have multiple so acc is a list.
         self.data_type = data_type
         self.medline = medline
         self.pazar_id = pazar_id
@@ -53,6 +59,9 @@ class Motif(motifs.Motif):
         tf_name_str = "TF name\t{0}\n".format(self.name)
         matrix_id_str = "Matrix ID\t{0}\n".format(self.matrix_id)
         the_string = "".join([tf_name_str, matrix_id_str])
+        if self.collection:
+            collection_str = "Collection\t{0}\n".format(self.collection)
+            the_string = "".join([the_string, collection_str])
         if self.tf_class:
             tf_class_str = "TF class\t{0}\n".format(self.tf_class)
             the_string = "".join([the_string, tf_class_str])
