@@ -75,13 +75,8 @@ class JASPAR5(object):
             # if ID contains no version portion, fetch latest version by default
             version = self._fetch_latest_version(base_id)
 
-        #print "base_id = %s" % base_id
-        #print "version = %d" % version
-
         # fetch internal JASPAR matrix ID - also a check for validity
         int_id = self._fetch_internal_id(base_id, version)
-
-        #print "int_id = %d" % int_id
 
         # fetch JASPAR motif using internal ID
         motif = self._fetch_motif_by_internal_id(int_id)
@@ -306,10 +301,7 @@ class JASPAR5(object):
         counts = {}
         cur = self.dbh.cursor()
 
-        #print "int_id = %d" % int_id
-
         for base in dna.letters:
-            #print "base = '%s'" % base
             base_counts = []
 
             cur.execute("select val from MATRIX_DATA where ID = %s and row = %s order by col", (int_id, base))
@@ -413,7 +405,6 @@ class JASPAR5(object):
             return int_ids
 
         tables = ["MATRIX m"]
-        table_joins = []
         where_clauses = []
 
         # Select by MATRIX.COLLECTION
@@ -421,8 +412,8 @@ class JASPAR5(object):
             if isinstance(collection, list):
                 # Multiple collections passed in as a list
                 clause = "m.COLLECTION in ('"
-                clause.join([clause, "','".join(collection)])
-                clause.join([clause, "')"])
+                clause = "".join([clause, "','".join(collection)])
+                clause = "".join([clause, "')"])
             else:
                 # A single collection - typical usage
                 clause = "m.COLLECTION = '%s'" % collection
@@ -434,8 +425,8 @@ class JASPAR5(object):
             if isinstance(tf_name, list):
                 # Multiple names passed in as a list
                 clause = "m.NAME in ('"
-                clause.join(tf_name, "','")
-                clause.join(["')"])
+                clause = "".join([clause, "','".join(tf_name)])
+                clause = "".join([clause, "')"])
             else:
                 # A single name
                 clause = "m.NAME = '%s'" % tf_name
@@ -445,16 +436,18 @@ class JASPAR5(object):
         # Select by MATRIX_SPECIES.TAX_ID
         if species:
             tables.append("MATRIX_SPECIES ms")
-            table_joins.append("m.ID = ms.ID ")
+            where_clauses.append("m.ID = ms.ID")
 
+            # NOTE: species are numeric taxonomy IDs but stored as varchars
+            # in the DB.
             if isinstance(species, list):
                 # Multiple tax IDs passed in as a list
-                clause.join(["ms.TAX_ID in ("])
-                clause.join(species, ",")
-                clause.join([")"])
+                clause = "ms.TAX_ID in ('"
+                clause = "".join([clause, "','".join(str(s) for s in species)])
+                clause = "".join([clause, "')"])
             else:
                 # A single tax ID
-                clause = "ms.TAX_ID = %d" % species
+                clause = "ms.TAX_ID = '%s'" % str(species)
 
             where_clauses.append(clause)
 
@@ -484,7 +477,7 @@ class JASPAR5(object):
         # Select by MATRIX_ANNOTATION VAL="class"
         if tf_class:
             tables.append("MATRIX_ANNOTATION ma1")
-            table_joins.append("m.ID = ma1.ID")
+            where_clauses.append("m.ID = ma1.ID")
 
             clause = "ma1.TAG = 'class'"
             if isinstance(tf_class, list):
@@ -500,7 +493,7 @@ class JASPAR5(object):
         # Select by MATRIX_ANNOTATION VAL="family"
         if tf_family:
             tables.append("MATRIX_ANNOTATION ma2")
-            table_joins.append("m.ID = ma2.ID")
+            where_clauses.append("m.ID = ma2.ID")
 
             clause = "ma2.TAG = 'family'"
             if isinstance(tf_family, list):
@@ -516,55 +509,55 @@ class JASPAR5(object):
         # Select by MATRIX_ANNOTATION VAL="pazar_tf_id"
         if tf_family:
             tables.append("MATRIX_ANNOTATION ma3")
-            table_joins.append("m.ID = ma3.ID")
+            where_clauses.append("m.ID = ma3.ID")
 
             clause = "ma3.TAG = 'pazar_tf_id'"
             if isinstance(pazar_id, list):
-                clause.join(["ma3.VAL in ('"])
-                clause.join(pazar_id, "','")
-                clause.join(["')"])
+                clause = "".join([clause, "ma3.VAL in ('"])
+                clause = "".join([clause, "','".join(pazar_id)])
+                clause = "".join([clause, "')"])
             else:
                 # A single tax ID
-                clause = "ma3.VAL = '%s' " % pazar_id
+                clause = "".join(["ma3.VAL = '%s' " % pazar_id])
 
             where_clauses.append(clause)
 
         # Select by MATRIX_ANNOTATION VAL="medline"
         if medline:
             tables.append("MATRIX_ANNOTATION ma4")
-            table_joins.append("m.ID = ma4.ID")
+            where_clauses.append("m.ID = ma4.ID")
 
             clause = "ma4.TAG = 'medline'"
             if isinstance(medline, list):
-                clause.join(["ma4.VAL in ('"])
-                clause.join(medline, "','")
-                clause.join(["')"])
+                clause = "".join([clause, "ma4.VAL in ('"])
+                clause = "".join([clause, "','".join(medline)])
+                clause = "".join([clause, "')"])
             else:
                 # A single tax ID
-                clause = "ma4.VAL = '%s' " % medline
+                clause = "".join(["ma4.VAL = '%s' " % medline])
 
             where_clauses.append(clause)
 
         # Select by MATRIX_ANNOTATION VAL="type"
         if data_type:
             tables.append("MATRIX_ANNOTATION ma5")
-            table_joins.append("m.ID = ma5.ID")
+            where_clauses.append("m.ID = ma5.ID")
 
             clause = "ma5.TAG = 'data_type'"
             if isinstance(data_type, list):
-                clause.join(["ma5.VAL in ('"])
-                clause.join(data_type, "','")
-                clause.join(["')"])
+                clause = "".join([clause, "ma5.VAL in ('"])
+                clause = "".join([clause, "','".join(data_type)])
+                clause = "".join([clause, "')"])
             else:
                 # A single tax ID
-                clause = "ma5.VAL = '%s' " % data_type
+                clause = "".join(["ma5.VAL = '%s' " % data_type])
 
             where_clauses.append(clause)
 
         # Select by MATRIX_ANNOTATION VAL="tax_group"
         if tax_group:
             tables.append("MATRIX_ANNOTATION ma6")
-            table_joins.append("m.ID = ma6.ID")
+            where_clauses.append("m.ID = ma6.ID")
 
             clause = "ma6.TAG = 'tax_group'"
             if isinstance(tax_group, list):
@@ -577,22 +570,12 @@ class JASPAR5(object):
 
             where_clauses.append(clause)
 
-        #print tables
-        #print table_joins
-        #print where_clauses
+        sql = "".join(["select distinct(m.ID) from ", ", ".join(tables)])
 
-        sql = "select distinct(m.ID) from "
-
-        table_str = ", ".join(tables)
-        #print table_str 
-        table_join_str = " and ".join(table_joins)
-        #print table_join_str 
-        where_clause_str = " and ".join(where_clauses)
-        #print where_clause_str 
+        if where_clauses:
+            sql = "".join([sql, " where ", " and ".join(where_clauses)])
         
-        sql = "".join([sql, table_str, " where ", table_join_str, " and ", where_clause_str])
-
-        print "sql = %s" % sql
+        #print "sql = %s" % sql
 
         cur.execute(sql)
         rows = cur.fetchall()
