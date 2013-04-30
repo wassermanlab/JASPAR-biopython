@@ -102,6 +102,9 @@ class Motif(motifs.Motif):
         """
         return self.matrix_id.__hash__()
 
+    def __eq__(self, other):
+        return self.matrix_id == other.matrix_id
+
 
 class Record(list):
     """
