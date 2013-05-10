@@ -8,7 +8,7 @@ sys.path.append("/homed/home/dave/devel/biopython-1.61")
 from Bio_dev.motifs import jaspar, matrix
 from warnings import warn
 
-DFLT_JASPAR_COLLECTION = 'CORE'
+JASPAR_DFLT_COLLECTION = 'CORE'
 
 class JASPAR5(object):
     """
@@ -118,7 +118,7 @@ class JASPAR5(object):
         return self.fetch_motif_by_id(base_ids[0])
 
     def fetch_motif_set(
-        self, collection=DFLT_JASPAR_COLLECTION, tf_name=None, tf_class=None,
+        self, collection=JASPAR_DFLT_COLLECTION, tf_name=None, tf_class=None,
         tf_family=None, matrix_id=None, tax_group=None, species=None,
         pazar_id=None, data_type=None, medline=None, min_ic=0, min_length=0,
         min_sites=0, all=False, all_versions=False
@@ -157,13 +157,9 @@ class JASPAR5(object):
         for int_id in int_ids:
             motif = self._fetch_motif_by_internal_id(int_id)
 
-            pfm = motif.counts
-
             # Filter motifs to those with matrix IC greater than min_ic
             if min_ic:
-                # TODO create a total_ic() method. This should be a
-                # method of the FrequencyPositionMatrix class
-                if counts.total_ic() < min_ic:
+                if motif.ic() < min_ic:
                     continue
 
             # Filter motifs to those with minimum length of min_length
@@ -315,7 +311,7 @@ class JASPAR5(object):
         return matrix.GenericPositionMatrix(dna, counts)
 
     def _fetch_internal_id_list(
-        self, collection=DFLT_JASPAR_COLLECTION, tf_name=None, tf_class=None,
+        self, collection=JASPAR_DFLT_COLLECTION, tf_name=None, tf_class=None,
         tf_family=None, matrix_id=None, tax_group=None, species=None,
         pazar_id=None, data_type=None, medline=None, all=False,
         all_versions=False
