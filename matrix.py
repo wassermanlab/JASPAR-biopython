@@ -240,7 +240,6 @@ class FrequencyPositionMatrix(GenericPositionMatrix):
         # Actual normalization is done in the PositionWeightMatrix initializer
         return PositionWeightMatrix(self.alphabet, counts)
 
-
 class PositionWeightMatrix(GenericPositionMatrix):
 
     def __init__(self, alphabet, counts):
@@ -295,7 +294,6 @@ class PositionWeightMatrix(GenericPositionMatrix):
                 values[letter].append(logodds)
         pssm = PositionSpecificScoringMatrix(alphabet, values)
         return pssm
-
 
 class PositionSpecificScoringMatrix(GenericPositionMatrix):
 
