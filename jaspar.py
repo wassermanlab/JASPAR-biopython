@@ -2,6 +2,7 @@ from Bio.Seq import Seq
 from Bio.Alphabet.IUPAC import unambiguous_dna as dna
 from math import sqrt
 import re
+import math
 
 import sys
 sys.path.append("/homed/home/dave/devel/biopython-1.61")
@@ -105,6 +106,42 @@ class Motif(motifs.Motif):
     def __eq__(self, other):
         return self.matrix_id == other.matrix_id
 
+    def ic(self):
+        """
+        Compute the total information content.
+        XXX This really belongs in the base Motif class
+        TODO We should add consideration of non-uniform background.
+        """
+        pwm = self.counts.normalize()
+        alphabet = self.alphabet
+        #b = self.background
+        ic = 0
+        for i in range(self.length):
+            ic += 2
+            for l in alphabet.letters:
+                if pwm[l][i]:
+                    #ic += pwm[l][i] * math.log(pwm[l][i] / b[l], 2)
+                    ic += pwm[l][i] * math.log(pwm[l][i], 2)
+
+        return ic
+
+    def gc_content(self):
+        """
+        Compute the GC content.
+        XXX This really belongs in the base Motif class
+        """
+        counts = self.counts
+        alphabet = self.alphabet
+        gc_total = 0
+        total = 0
+        for i in xrange(self.length):
+            for letter in alphabet.letters:
+                if letter == 'C' or letter == 'G':
+                    gc_total += counts[letter][i]
+
+                total += counts[letter][i]
+
+        return float(gc_total) / total
 
 class Record(list):
     """
@@ -228,7 +265,7 @@ def _read_jaspar(handle):
 
     record = Record()
 
-    head_pat = re.compile(r"^>\s*(\S+)\s+(\S+)")
+    head_pat = re.compile(r"^>\s*(\S+)(\s+(\S+))?")
     row_pat = re.compile(r"\s*([ACGT])\s*\[\s*(.*)\s*\]")
 
     id = None
@@ -241,7 +278,11 @@ def _read_jaspar(handle):
         row_match = row_pat.match(line)
 
         if head_match:
-            (id, name) = head_match.group(1, 2)
+            id = head_match.group(1)
+            if head_match.group(2):
+                name = head_match.group(2)
+            else
+                name = id
         elif row_match:
             (letter, counts_str) = row_match.group(1, 2)
 
