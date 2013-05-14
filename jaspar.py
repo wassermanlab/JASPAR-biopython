@@ -103,18 +103,27 @@ class Motif(motifs.Motif):
         """
         Compute the total information content.
         XXX This really belongs in the base Motif class
-        TODO We should add consideration of non-uniform background.
         """
-        pwm = self.counts.normalize()
+        pwm = self.pwm
         alphabet = self.alphabet
-        #b = self.background
+        background = self.background
+        if background:
+            background = dict(background)
+        else:
+            background = dict.fromkeys(sorted(self.alphabet.letters), 1.0)
+
+        total = sum(background.values())
+        for l in alphabet.letters:
+            background[l] /= total
+
         ic = 0
         for i in range(self.length):
-            ic += 2
             for l in alphabet.letters:
-                if pwm[l][i]:
-                    #ic += pwm[l][i] * math.log(pwm[l][i] / b[l], 2)
-                    ic += pwm[l][i] * math.log(pwm[l][i], 2)
+                p = pwm[l][i]
+                b = background[l]
+                if b > 0:
+                    if p > 0:
+                        ic += p * math.log(p/b, 2)
 
         return ic
 
