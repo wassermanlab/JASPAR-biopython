@@ -1,12 +1,11 @@
 from Bio.Seq import Seq
 from Bio.Alphabet.IUPAC import unambiguous_dna as dna
-from math import sqrt
 import re
 import math
 
 import sys
-sys.path.append("/homed/home/dave/devel/biopython-1.61")
-#sys.path.append("/home/anthony/PostDoc/JASPAR2013/Biopython_package/biopython-master/")
+#sys.path.append("/homed/home/dave/devel/biopython-1.61")
+sys.path.append("/home/anthony/PostDoc/JASPAR2013/Biopython_package/biopython-master/")
 from Bio_dev import motifs
 
 
@@ -35,9 +34,6 @@ class Motif(motifs.Motif):
         # We assume a uniform distribution of the nt in the background
         self.background = dict.fromkeys(alphabet.letters, 0.25)
         # Number of sequences used to make the counts
-        nb_seq = sum([self.counts[nt][0] for nt in alphabet.letters])
-        self.pseudocounts = dict(
-            (nt, self.background[nt] * sqrt(nb_seq)) for nt in alphabet.letters)
         self.collection = collection
         self.tf_class = tf_class
         self.tf_family = tf_family
@@ -143,6 +139,7 @@ class Motif(motifs.Motif):
 
         return float(gc_total) / total
 
+
 class Record(list):
     """
     Represents a list of jaspar motifs
@@ -156,7 +153,18 @@ class Record(list):
         self.version = None
 
     def __str__(self):
-        return "\n".join([the_motif.__str__() for the_motif in self])
+        return "\n".join([str(the_motif) for the_motif in self])
+
+    def to_dict(self):
+        """
+        Return the list of matrices as a dictionnary of matrices
+
+        """
+
+        dic = {}
+        for motif in self:
+            dic[motif.matrix_id] = motif
+        return dic
 
 
 def read(handle, format):
@@ -193,6 +201,7 @@ def write(motif):
     text = "".join(lines)
     return text
 
+
 def _read_pfm(handle):
     """
     Reads the motif from a JASPAR .pfm file
@@ -215,6 +224,7 @@ def _read_pfm(handle):
     record.append(motif)
 
     return record
+
 
 def _read_sites(handle):
     """
@@ -247,10 +257,11 @@ def _read_sites(handle):
 
     return record
 
+
 def _read_jaspar(handle):
     """
     Read motifs from a JASPAR formatted file
-    
+
     Format is one or more records of the form, e.g.:
     >MA0001.1 AGL3
     A  [ 0  3 79 40 66 48 65 11 65  0 ]
@@ -268,7 +279,7 @@ def _read_jaspar(handle):
     head_pat = re.compile(r"^>\s*(\S+)(\s+(\S+))?")
     row_pat = re.compile(r"\s*([ACGT])\s*\[\s*(.*)\s*\]")
 
-    id = None
+    identifier = None
     name = None
     row_count = 0
     for line in handle:
@@ -278,11 +289,11 @@ def _read_jaspar(handle):
         row_match = row_pat.match(line)
 
         if head_match:
-            id = head_match.group(1)
+            identifier = head_match.group(1)
             if head_match.group(2):
                 name = head_match.group(2)
-            else
-                name = id
+            else:
+                name = identifier
         elif row_match:
             (letter, counts_str) = row_match.group(1, 2)
 
@@ -293,11 +304,24 @@ def _read_jaspar(handle):
             row_count += 1
 
             if row_count == 4:
-                record.append(Motif(id, name, alphabet=alphabet, counts=counts))
+                record.append(Motif(identifier, name, alphabet=alphabet,
+                                    counts=counts))
 
-                id = None
+                identifier = None
                 name = None
                 counts = {}
                 row_count = 0
 
     return record
+
+
+def the_jaspar_pseudocount(motif):
+    """
+    Return the pseudocount used in JASPAR for PSSM computation
+
+    Note: Only works when considering a uniform distribution of the background
+
+    """
+    nb_instances = sum([column[0] for column in motif.counts.values()])
+    # We assume a uniform distribution of the background
+    return math.sqrt(nb_instances) * 0.25
