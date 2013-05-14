@@ -31,9 +31,6 @@ class Motif(motifs.Motif):
         # attributes or just provide methods to split/return the matrix ID
         # into base_id and version
         self.matrix_id = matrix_id
-        # We assume a uniform distribution of the nt in the background
-        self.background = dict.fromkeys(alphabet.letters, 0.25)
-        # Number of sequences used to make the counts
         self.collection = collection
         self.tf_class = tf_class
         self.tf_family = tf_family
@@ -315,13 +312,21 @@ def _read_jaspar(handle):
     return record
 
 
-def the_jaspar_pseudocount(motif):
+def jaspar_pseudocount(motif):
     """
     Return the pseudocount used in JASPAR for PSSM computation
 
-    Note: Only works when considering a uniform distribution of the background
-
     """
     nb_instances = sum([column[0] for column in motif.counts.values()])
-    # We assume a uniform distribution of the background
-    return math.sqrt(nb_instances) * 0.25
+    sq_nb_instances = math.sqrt(nb_instances)
+    background = motif.background
+    if background:
+        background = dict(background)
+    else:
+        background = dict.fromkeys(sorted(motif.alphabet.letters), 1.0)
+    total = sum(background.values())
+    pseudocount = {}
+    for letter in motif.alphabet.letters:
+        background[letter] /= total
+        pseudocount[letter] = sq_nb_instances * background[letter]
+    return pseudocount
