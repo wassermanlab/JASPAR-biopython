@@ -117,26 +117,24 @@ class JASPAR5(object):
 
         return self.fetch_motif_by_id(base_ids[0])
 
-    def fetch_motif_set(
+    def fetch_motifs(
         self, collection=JASPAR_DFLT_COLLECTION, tf_name=None, tf_class=None,
         tf_family=None, matrix_id=None, tax_group=None, species=None,
         pazar_id=None, data_type=None, medline=None, min_ic=0, min_length=0,
         min_sites=0, all=False, all_versions=False
     ):
         """
-        Fetch a set of motifs based on the provided selection criteria.
+        Fetch a jaspar.Record (list) of motifs based on the provided selection
+        criteria.
 
-        Return a set of motifs.
+        Return a jaspar.Record (list) of motifs.
 
         The the logic in the perl TFBS modules was that if no collection
-        was specified, set it to default. But it is quite possible a user
-        would want to select a set of motifs across different collectons.
-        In the python context the collection argument could be explicitly set
-        to None.
+        was specified, set it to default. But is it possible a user may want
+        to select motifs across different collectons. In the python context
+        the collection argument could be explicitly set to None.
         TODO Think about this and make a decision.
         """
-
-        motif_set = set()
 
         # Fetch the internal IDs of the motifs using the criteria provided
         int_ids = self._fetch_internal_id_list(
@@ -153,6 +151,8 @@ class JASPAR5(object):
             all = all,
             all_versions = all_versions
         )
+
+        record = jaspar.Record()
 
         for int_id in int_ids:
             motif = self._fetch_motif_by_internal_id(int_id)
@@ -181,6 +181,37 @@ class JASPAR5(object):
                 if  num_sites < min_sites:
                     continue
 
+            record.append(motif)
+
+        return record
+
+    def fetch_motif_set(
+        self, collection=JASPAR_DFLT_COLLECTION, tf_name=None, tf_class=None,
+        tf_family=None, matrix_id=None, tax_group=None, species=None,
+        pazar_id=None, data_type=None, medline=None, min_ic=0, min_length=0,
+        min_sites=0, all=False, all_versions=False
+    ):
+        """
+        Fetch a set of motifs based on the provided selection criteria.
+
+        Return a set of motifs.
+
+        This is a convenience method which just calls fetch_motifs() and
+        converts the list to a set.
+
+        """
+
+        motif_set = set()
+
+        motifs = self.fetch_motifs(
+            collection=collection, tf_name=tf_name, tf_class=tf_class,
+            tf_family=tf_family, matrix_id=matrix_id, tax_group=tax_group,
+            species=species, pazar_id=pazar_id, data_type=data_type,
+            medline=medline, min_ic=min_ic, min_length=min_length,
+            min_sites=min_sites, all=all, all_versions=all_versions
+        )
+
+        for motif in motifs:
             motif_set.add(motif)
 
         return motif_set
@@ -503,7 +534,7 @@ class JASPAR5(object):
             where_clauses.append(clause)
 
         # Select by MATRIX_ANNOTATION VAL="pazar_tf_id"
-        if tf_family:
+        if pazar_id:
             tables.append("MATRIX_ANNOTATION ma3")
             where_clauses.append("m.ID = ma3.ID")
 
