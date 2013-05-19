@@ -103,7 +103,9 @@ class Motif(motifs.Motif):
         """
         Compute the total information content.
         XXX This really belongs in the base Motif class
+
         """
+
         pwm = self.pwm
         alphabet = self.alphabet
         background = self.background
@@ -123,7 +125,7 @@ class Motif(motifs.Motif):
                 b = background[l]
                 if b > 0:
                     if p > 0:
-                        ic += p * math.log(p/b, 2)
+                        ic += p * math.log(p / b, 2)
 
         return ic
 
