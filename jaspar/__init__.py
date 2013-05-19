@@ -129,23 +129,6 @@ class Motif(motifs.Motif):
 
         return ic
 
-    def gc_content(self):
-        """
-        Compute the GC content.
-        XXX This really belongs in the base Motif class
-        """
-        counts = self.counts
-        alphabet = self.alphabet
-        gc_total = 0
-        total = 0
-        for i in xrange(self.length):
-            for letter in alphabet.letters:
-                if letter == 'C' or letter == 'G':
-                    gc_total += counts[letter][i]
-
-                total += counts[letter][i]
-
-        return float(gc_total) / total
 
 
 class Record(list):

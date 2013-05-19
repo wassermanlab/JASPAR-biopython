@@ -118,7 +118,7 @@ class GenericPositionMatrix(dict):
             return d
         else:
             raise RuntimeError("Should not get here")
-        
+
     @property
     def consensus(self):
         """Returns the consensus sequence.
@@ -209,6 +209,23 @@ class GenericPositionMatrix(dict):
         alphabet = self.alphabet
         return self.__class__(alphabet, values)
 
+    @property
+    def gc_content(self):
+        """
+        Compute the %GC content.
+        """
+        alphabet = self.alphabet
+        gc_total = 0
+        total = 0
+        for i in xrange(self.length):
+            for letter in alphabet.letters:
+                if letter == 'C' or letter == 'G':
+                    gc_total += self[letter][i]
+
+                total += self[letter][i]
+
+        return float(gc_total) / total
+
 
 class FrequencyPositionMatrix(GenericPositionMatrix):
 
@@ -239,6 +256,7 @@ class FrequencyPositionMatrix(GenericPositionMatrix):
                 counts[letter][i] += self[letter][i]
         # Actual normalization is done in the PositionWeightMatrix initializer
         return PositionWeightMatrix(self.alphabet, counts)
+
 
 class PositionWeightMatrix(GenericPositionMatrix):
 
@@ -294,6 +312,7 @@ class PositionWeightMatrix(GenericPositionMatrix):
                 values[letter].append(logodds)
         pssm = PositionSpecificScoringMatrix(alphabet, values)
         return pssm
+
 
 class PositionSpecificScoringMatrix(GenericPositionMatrix):
 
@@ -380,6 +399,10 @@ class PositionSpecificScoringMatrix(GenericPositionMatrix):
         for position in xrange(0,self.length):
             score += min([self[letter][position] for letter in letters])
         return score
+
+    @property
+    def gc_content(self):
+        raise Exception("Cannot compute the \%GC composition of a PSSM")
 
     def mean(self, background=None):
         """Expected value of the score of a motif."""
