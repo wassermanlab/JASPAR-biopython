@@ -520,3 +520,23 @@ def write(motifs, format):
         return transfac.write(motifs)
     else:
         raise ValueError("Unknown format type %s" % format)
+
+
+def jaspar_pseudocount(motif):
+    """
+    Return the pseudocount used in JASPAR for PSSM computation
+
+    """
+    nb_instances = sum([column[0] for column in motif.counts.values()])
+    sq_nb_instances = math.sqrt(nb_instances)
+    background = motif.background
+    if background:
+        background = dict(background)
+    else:
+        background = dict.fromkeys(sorted(motif.alphabet.letters), 1.0)
+    total = sum(background.values())
+    pseudocount = {}
+    for letter in motif.alphabet.letters:
+        background[letter] /= total
+        pseudocount[letter] = sq_nb_instances * background[letter]
+    return pseudocount
