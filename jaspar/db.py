@@ -1,9 +1,75 @@
-import MySQLdb as mdb
+"""
+This modules requires MySQLdb to be installed.
+
+Provides read access to a JASPAR5 formatted database.
+
+Example:
+
+    >>> from Bio.motifs.jaspar.db import JASPAR5
+    >>> 
+    >>> JASPAR_DB_HOST = 'vm5.cmmt.ubc.ca'
+    >>> JASPAR_DB_NAME = 'JASPAR_2010'
+    >>> JASPAR_DB_USER = 'jaspar_r'
+    >>> JASPAR_DB_PASS = ''
+    >>> 
+    >>> DFLT_COLLECTION = 'CORE'
+    >>> jdb = JASPAR5(
+    ...     host=JASPAR_DB_HOST,
+    ...     name=JASPAR_DB_NAME,
+    ...     user=JASPAR_DB_USER,
+    ...     password=JASPAR_DB_PASS
+    ... )
+    >>> 
+    >>> 
+    >>> ets1 = jdb.fetch_motif_by_id('MA0098')
+    >>> print ets1
+    TF name ETS1
+    Matrix ID   MA0098.1
+    Collection  CORE
+    TF class    Winged Helix-Turn-Helix
+    TF family   Ets
+    Species 9606
+    Taxonomic group vertebrates
+    Accession   ['CAG47050']
+    Data type used  SELEX
+    Medline 1542566
+    PAZAR ID    TF0000070
+    Comments    -
+    Matrix:
+            0      1      2      3      4      5
+    A:   4.00  17.00   0.00   0.00   0.00   5.00
+    C:  16.00   0.00   1.00  39.00  39.00   3.00
+    G:   4.00   0.00   0.00   1.00   0.00  17.00
+    T:  16.00  23.00  39.00   0.00   1.00  15.00
+
+
+    >>> 
+    >>> motifs = jdb.fetch_motifs(
+    ...     collection = 'CORE',
+    ...     tax_group = ['vertebrates', 'insects'],
+    ...     tf_class = 'Winged Helix-Turn-Helix',
+    ...     tf_family = ['Forkhead', 'Ets'],
+    ...     min_ic = 12
+    ... )
+    >>> 
+    >>> for motif in motifs:
+    ...     # do something with the motif
+
+"""
+
+from Bio import MissingPythonDependencyError
+
+try:
+    import MySQLdb as mdb
+except:
+    raise MissingPythonDependencyError("Install MySQLdb if you want to use "
+                                       "Bio.motifs.jaspar.db")
+
 
 from Bio.Alphabet.IUPAC import unambiguous_dna as dna
 
 import sys
-sys.path.append("/homed/home/dave/devel/biopython-1.61")
+sys.path.append("/homed/home/dave/devel/biopython_devel")
 #sys.path.append("/home/anthony/PostDoc/JASPAR2013/Biopython_package/biopython-master/")
 from Bio_dev.motifs import jaspar, matrix
 from warnings import warn
@@ -12,17 +78,25 @@ JASPAR_DFLT_COLLECTION = 'CORE'
 
 class JASPAR5(object):
     """
-    Class representing a JASPAR5 DB. VERY loosely based on the perl
-    TFBS::DB::JASPAR5 module.
+    Class representing a JASPAR5 DB. The methods within are loosely based
+    on the perl TFBS::DB::JASPAR5 module.
 
     Note: We will only implement reading of JASPAR motifs from the DB.
     Unlike the perl module, we will not attempt to implement any methods to
     store JASPAR motifs or create a new DB at this time.
+
     """
 
     def __init__(self, host=None, name=None, user=None, password=None):
         """
         Construct a JASPAR5 instance and connect to specified DB
+
+        Arguments:
+        host - host name of the the JASPAR DB server
+        name - name of the JASPAR database
+        user - user name to connect to the JASPAR DB
+        password - JASPAR DB password
+
         """
 
         self.name = name
@@ -36,41 +110,34 @@ class JASPAR5(object):
         """
         Return a string represention of the JASPAR5 DB connection.
         
-        ### TODO
-            This should be in some sort of standardized format, e.g. a
-            dbi connect string
         """
 
         str = "%s\@%s:%s" % (self.user, self.host, self.name)
 
         return str
 
-    def __hash__(self):
-        """
-        ### TODO Determine if we even need this.
-        """
-
-        ### TODO Is this correct?
-        return hash(self.__str__())
-
     def fetch_motif_by_id(self, id):
         """
         Fetch a single JASPAR motif from the DB by it's JASPAR matrix ID
         (e.g. 'MA0001.1').
+
+        Arguments:
+        id - JASPAR matrix ID. This may be a fully specified ID including the
+             version number (e.g. MA0049.2) or just the base ID (e.g. MA0049).
+             If only a base ID is provided, the latest version is returned.
+        Returns:
+        A Bio.motifs.Motif.jaspar object
 
         NOTE: The perl TFBS module allows you to specify the type of matrix to
         return (PFM, PWM, ICM) but matrices are always stored in JASAPR as
         PFMs so this does not really belong here. Once a PFM is fetched the
         pwm() and pssm() methods can be called to return the normalized and
         log-odds matrices.
+
         """
          
-        if not id:
-            # TODO Throw some sort of exception if no id is provided?
-            pass
-
         # separate stable ID and version number
-        (base_id, version) = _split_jaspar_id(id) 
+        (base_id, version) = jaspar.split_jaspar_id(id) 
         if not version:
             # if ID contains no version portion, fetch latest version by default
             version = self._fetch_latest_version(base_id)
@@ -83,39 +150,29 @@ class JASPAR5(object):
 
         return motif
 
-    def fetch_motif_by_name(self, name):
+    def fetch_motifs_by_name(self, name):
         """
-        Fetch a single JASPAR motif from the DB by the TF name
-        (e.g. RUNX1).
-        """
+        Fetch a list of JASPAR motifs from a JASPAR DB by the given TF name(s).
+        
+        Arguments:
+        name - a single name or list of names
+        Returns:
+        A list of Bio.motifs.Motif.japar objects
          
-        if not name:
-            # TODO Throw some sort of exception if no name is provided?
-            pass
+        Notes:
+        Names are not guaranteed to be unique. There may be more than one
+        motif with the same name. Therefore even if name specifies a single
+        name, a list of motifs is returned. This just calls
+        self.fetch_motifs(collection = None, tf_name = name).
 
-        # Name is not guaranteed to be unique. There may be more than one
-        # motif with the same name. In this case, return the first motif
-        # fetched from the database and provide a warning.
-        # This is the way it was handled in the TFBS perl modules, but is
-        # this good practice? Is it pythonesque? If the motif are from
-        # different collections perhaps we should prefer the one from
-        # the default JASPAR collection?
-        # TODO Decide how to handle this and implement it.
-        sql = "select distinct BASE_ID from MATRIX where NAME = '%s'" % name
+        This behaviour is different from the TFBS perl module's
+        get_Matrix_by_name() method which always returns a single matrix,
+        issuing a warning message and returning the first matrix retrieved
+        in the case where multiple matrices have the same name.
 
-        cur = self.dbh.cursor()
-        cur.execute(sql)
+        """
 
-        rows = cur.fetchall()
-        base_ids = []
-        for row in rows:
-            base_ids.append(row[0])
-
-        num_motifs = len(base_ids)
-        if num_motifs > 1:
-            warn("There are %d JASPAR motifs with name '%s'" % (num_motifs, name))
-
-        return self.fetch_motif_by_id(base_ids[0])
+        return self.fetch_motifs(collection=None, tf_name=name)
 
     def fetch_motifs(
         self, collection=JASPAR_DFLT_COLLECTION, tf_name=None, tf_class=None,
@@ -127,13 +184,58 @@ class JASPAR5(object):
         Fetch a jaspar.Record (list) of motifs based on the provided selection
         criteria.
 
-        Return a jaspar.Record (list) of motifs.
+        Arguments:
+        Except where obvious, all selection criteria arguments may be specified
+        as a single value or a list of values. Motifs must meet ALL the
+        specified selection criteria to be returned with the precedent
+        exceptions noted below.
 
-        The the logic in the perl TFBS modules was that if no collection
-        was specified, set it to default. But is it possible a user may want
-        to select motifs across different collectons. In the python context
-        the collection argument could be explicitly set to None.
-        TODO Think about this and make a decision.
+        all         - Takes precedent of all other selection criteria.
+                      Every motif is returned. If 'all_versions' is also
+                      specified, all versions of every motif are returned,
+                      otherwise just the latest version of every motif is
+                      returned.
+        matrix_id   - Takes precedence over all other selection criteria except
+                      'all'.  Only motifs with the given JASPAR matrix ID(s)
+                      are returned. A matrix ID may be specified as just a base
+                      ID or full JASPAR IDs including version number. If only a
+                      base ID is provided for specific motif(s), then just the
+                      latest version of those motif(s) are returned unless
+                      'all_versions' is also specified.
+        collection  - Only motifs from the specified JASPAR collection(s)
+                      are returned. NOTE - if not specified, the collection
+                      defaults to CORE for all other selection criteria except
+                      'all' and 'matrix_id'. To apply the other selection
+                      criteria across all JASPAR collections, explicitly set
+                      collection=None.
+        tf_name     - Only motifs with the given name(s) are returned.
+        tf_class    - Only motifs of the given TF class(es) are returned.
+        tf_family   - Only motifs from the given TF families are returned.
+        tax_group   - Only motifs belonging to the given taxonomic supergroups
+                      are returned (e.g. 'vertebrates', 'insects', 'nematodes'
+                      etc.)
+        species     - Only motifs derived from the given species are returned.
+                      Species are specified as taxonomy IDs.
+        data_type   - Only motifs generated with the given data type (e.g.
+                      ('ChIP-seq', 'PBM', 'SELEX' etc.) are returned. NOTE -
+                      must match exactly as stored in the database.
+        pazar_id    - Only motifs with the given PAZAR TF ID are returned.
+        medline     - Only motifs with the given medline (PubmMed IDs) are 
+                      returned.
+        min_ic      - Only motifs whose profile matrices have at least this
+                      information content (specificty) are returned.
+        min_length  - Only motifs whose profiles are of at least this length
+                      are returned.
+        min_sites   - Only motifs compiled from at least these many binding
+                      sites are returned.
+        all_versions- Unless specified, just the latest version of motifs
+                      determined by the other selection criteria are returned
+                      otherwise all versions of the selected motifs are
+                      returned.
+
+        Returns:
+        A Bio.motifs.Motif.jaspar.Record (list) of motifs.
+
         """
 
         # Fetch the internal IDs of the motifs using the criteria provided
@@ -154,6 +256,10 @@ class JASPAR5(object):
 
         record = jaspar.Record()
 
+        """
+        Now further filter motifs returned above based on any specified
+        matrix specific criteria.
+        """
         for int_id in int_ids:
             motif = self._fetch_motif_by_internal_id(int_id)
 
@@ -167,13 +273,14 @@ class JASPAR5(object):
                 if motif.length < min_length:
                     continue
 
-            # TODO - Not provided in perl TFBS modules but perhaps we should
-            # also have a max_length filter.
+            # XXX We could also supply a max_length filter.
 
-            # Filter motifs to those composed of at least this many sites.
-            # The perl TFBS module assumes column sums may be different but
-            # this should be strictly enforced here we will ignore this and
-            # just use the first colum sum.
+            """
+            Filter motifs to those composed of at least this many sites.
+            The perl TFBS module assumes column sums may be different but
+            this should be strictly enforced here we will ignore this and
+            just use the first column sum.
+            """
             if min_sites:
                 num_sites = sum(
                     [motif.counts[nt][0] for nt in motif.alphabet.letters]
@@ -184,37 +291,6 @@ class JASPAR5(object):
             record.append(motif)
 
         return record
-
-    def fetch_motif_set(
-        self, collection=JASPAR_DFLT_COLLECTION, tf_name=None, tf_class=None,
-        tf_family=None, matrix_id=None, tax_group=None, species=None,
-        pazar_id=None, data_type=None, medline=None, min_ic=0, min_length=0,
-        min_sites=0, all=False, all_versions=False
-    ):
-        """
-        Fetch a set of motifs based on the provided selection criteria.
-
-        Return a set of motifs.
-
-        This is a convenience method which just calls fetch_motifs() and
-        converts the list to a set.
-
-        """
-
-        motif_set = set()
-
-        motifs = self.fetch_motifs(
-            collection=collection, tf_name=tf_name, tf_class=tf_class,
-            tf_family=tf_family, matrix_id=matrix_id, tax_group=tax_group,
-            species=species, pazar_id=pazar_id, data_type=data_type,
-            medline=medline, min_ic=min_ic, min_length=min_length,
-            min_sites=min_sites, all=all, all_versions=all_versions
-        )
-
-        for motif in motifs:
-            motif_set.add(motif)
-
-        return motif_set
 
     def _fetch_latest_version(self, base_id):
         """
@@ -235,6 +311,7 @@ class JASPAR5(object):
         """
         Fetch the internal id for a base id + version. Also checks if this
         combo exists or not
+
         """
 
         sql = "select id from MATRIX where BASE_id = '%s' and VERSION = '%s'" % (base_id, version)
@@ -313,8 +390,10 @@ class JASPAR5(object):
             elif attr == 'comment':
                 motif.comment = val
             else:
-                # TODO If we were to implement additional abitrary tags
-                #motif.tag(attr, val)
+                """
+                TODO If we were to implement additional abitrary tags
+                motif.tag(attr, val)
+                """
                 pass
 
         return motif
@@ -324,6 +403,7 @@ class JASPAR5(object):
         Fetch the counts matrix from the JASPAR DB by the internal ID
 
         Returns a Bio.motifs.matrix.GenericPositionMatrix
+
         """
         counts = {}
         cur = self.dbh.cursor()
@@ -349,45 +429,42 @@ class JASPAR5(object):
     ):
         """
         Fetch a list of internal JASPAR motif IDs based on various passed
-        parameters which may then be used to fetch the actual matrices.
+        parameters which may then be used to fetch the rest of the motif data.
 
-        Caller: fetch_motif_set()
+        Caller:
+            fetch_motifs()
 
-        1: First catch non-tag things like collection, name and version,
-           species. Make one query for these if they are named and check the
-           IDs for "latest" unless requested not to. These are AND statements.
+        Arguments:
+            See arguments sections of fetch_motifs()
 
-        2: Then do the rest on tag level. To be able to do this with actual
-           AND statemnet in the tag table, we do an inner join query, which
-           is kept separate just for convenience
+        Returns:
+            A list of internal JASPAR motif IDs which match the given
+            selection criteria arguments.
 
-        3: Intersect 1 and 2
+
+        Build an SQL query based on the selection arguments provided.
+
+        1: First add table joins and sub-clauses for criteria corresponding to
+           named fields from the MATRIX and MATRIX_SPECIES tables such as
+           collection, matrix ID, name, species etc.
+
+        2: Then add joins/sub-clauses for tag/value parameters from the
+           MATRIX_ANNOTATION table.
 
         For the surviving matrices, the responsibility to do matrix-based
         feature filtering such as ic, number of sites etc, fall on the
-        calling fetch_motif_set() method.
+        calling fetch_motifs() method.
 
-        TODO
-        This is a direct python translation of the perl TFBS package
-        _get_IDlist_by_query and needs serious cleanup/refactoring.
-
-        The the logic in the perl TFBS modules was that if no collection
-        was specified, set it to default. But it is quite possible a user
-        would want to select a set of motifs across different collectons.
-        In the python context the collection argument could be explicitly set
-        to None.
-        TODO Think about this and make a decision.
         """
 
         int_ids = []
 
         cur = self.dbh.cursor()
 
-        # Should redo so that matrix_annotation queries are separate, with an
-        # intersect in the end 
-
-        # Special case 1: fetch ALL motifs. Highest priority.
-        # Ignore all other selection arguments.
+        """
+        Special case 1: fetch ALL motifs. Highest priority.
+        Ignore all other selection arguments.
+        """
         if all:
             cur.execute("select ID from MATRIX")
             rows = cur.fetchall()
@@ -397,18 +474,21 @@ class JASPAR5(object):
 
             return int_ids
                 
-
-        # Special case 2: fetch specific motifs by their JASPAR IDs. This
-        # has higher priority than any other except the above 'all' case.
-        # Ignore all other selection arguments.
+        """
+        Special case 2: fetch specific motifs by their JASPAR IDs. This
+        has higher priority than any other except the above 'all' case.
+        Ignore all other selection arguments.
+        """
         if matrix_id:
-            # These might be either stable IDs or stable_ID.version.
-            # If just stable ID and if all_versions == 1, return all versions,
-            # otherwise just the latest
+            """
+            These might be either stable IDs or stable_ID.version.
+            If just stable ID and if all_versions == 1, return all versions,
+            otherwise just the latest
+            """
             if all_versions:
                 for id in matrix_id:
                     # ignore vesion here, this is a stupidity filter
-                    (base_id, version) = _split_jaspar_id(id) 
+                    (base_id, version) = jaspar.split_jaspar_id(id) 
                     cur.execute(
                         "select ID from MATRIX where BASE_ID = %s", base_id
                     )
@@ -418,8 +498,8 @@ class JASPAR5(object):
                         int_ids.append(row[0])
             else:
                 # only the lastest version, or the requested version
-                for id in ids:
-                    (base_id, version) = _split_jaspar_id(id) 
+                for id in matrix_id:
+                    (base_id, version) = jaspar.split_jaspar_id(id) 
 
                     if not version:
                         version = self._fetch_latest_version(base_id)
@@ -465,8 +545,10 @@ class JASPAR5(object):
             tables.append("MATRIX_SPECIES ms")
             where_clauses.append("m.ID = ms.ID")
 
-            # NOTE: species are numeric taxonomy IDs but stored as varchars
-            # in the DB.
+            """
+            NOTE: species are numeric taxonomy IDs but stored as varchars
+            in the DB.
+            """
             if isinstance(species, list):
                 # Multiple tax IDs passed in as a list
                 clause = "ms.TAX_ID in ('"
@@ -478,116 +560,122 @@ class JASPAR5(object):
 
             where_clauses.append(clause)
 
+        """
+        Tag based selection from MATRIX_ANNOTATION
+        Differs from perl TFBS module in that the matrix class explicitly
+        has a tag attribute corresponding to the tags in the database. This
+        provides tremendous flexibility in adding new tags to the DB and
+        being able to select based on those tags with out adding new code.
+        In the JASPAR Motif class we have elected to use specific attributes
+        for the most commonly used tags and here correspondingly only allow
+        selection on these attributes.
 
-        #
-        # Tag based selection from MATRIX_ANNOTATION
-        # Differs from perl TFBS module in that the matrix class explicitly
-        # has a tag attribute corresponding to the tags in the database. This
-        # provides tremendous flexibility in adding new tags to the DB and
-        # being able to select based on those tags with out adding new code.
-        # In the JASPAR Motif class we have elected to use specific attributes
-        # for the most commonly used tags and here correspondingly only allow
-        # selection on these attributes.
-        #
-        # The attributes corresponding to the tags for which selection is
-        # provided are:
-        #
-        #   Attribute   Tag
-        #   tf_class    class
-        #   tf_family   family
-        #   pazar_id    pazar_tf_id
-        #   medline     medline
-        #   data_type   type
-        #   tax_group   tax_group
-        #
+        The attributes corresponding to the tags for which selection is
+        provided are:
 
-        # Select by MATRIX_ANNOTATION VAL="class"
+           Attribute   Tag
+           tf_class    class
+           tf_family   family
+           pazar_id    pazar_tf_id
+           medline     medline
+           data_type   type
+           tax_group   tax_group
+        """
+
+        # Select by TF class(es) (MATRIX_ANNOTATION.TAG="class")
         if tf_class:
             tables.append("MATRIX_ANNOTATION ma1")
             where_clauses.append("m.ID = ma1.ID")
 
             clause = "ma1.TAG = 'class'"
             if isinstance(tf_class, list):
+                # A list of TF classes
                 clause = "".join([clause, " and ma1.VAL in ('"])
                 clause = "".join([clause, "','".join(tf_class)])
                 clause = "".join([clause, "')"])
             else:
-                # A single tax ID
+                # A single TF class
                 clause = "".join([clause, " and ma1.VAL = '%s' " % tf_class])
 
             where_clauses.append(clause)
 
-        # Select by MATRIX_ANNOTATION VAL="family"
+        # Select by TF families (MATRIX_ANNOTATION.TAG="family")
         if tf_family:
             tables.append("MATRIX_ANNOTATION ma2")
             where_clauses.append("m.ID = ma2.ID")
 
             clause = "ma2.TAG = 'family'"
             if isinstance(tf_family, list):
-                clause = "".join([clause, "ma2.VAL in ('"])
-                clause = "".join([clause, "','".join(family)])
+                # A list of TF families
+                clause = "".join([clause, " and ma2.VAL in ('"])
+                clause = "".join([clause, "','".join(tf_family)])
                 clause = "".join([clause, "')"])
             else:
-                # A single tax ID
-                clause = "".join([clause, "ma2.VAL = '%s' " % tf_family])
+                # A single TF family
+                clause = "".join([clause, " and ma2.VAL = '%s' " % tf_family])
 
             where_clauses.append(clause)
 
-        # Select by MATRIX_ANNOTATION VAL="pazar_tf_id"
+        # Select by PAZAR TF ID(s) (MATRIX_ANNOTATION.TAG="pazar_tf_id")
         if pazar_id:
             tables.append("MATRIX_ANNOTATION ma3")
             where_clauses.append("m.ID = ma3.ID")
 
             clause = "ma3.TAG = 'pazar_tf_id'"
             if isinstance(pazar_id, list):
-                clause = "".join([clause, "ma3.VAL in ('"])
+                # A list of PAZAR IDs
+                clause = "".join([clause, " and ma3.VAL in ('"])
                 clause = "".join([clause, "','".join(pazar_id)])
                 clause = "".join([clause, "')"])
             else:
-                # A single tax ID
-                clause = "".join(["ma3.VAL = '%s' " % pazar_id])
+                # A single PAZAR ID
+                clause = "".join([" and ma3.VAL = '%s' " % pazar_id])
 
             where_clauses.append(clause)
 
-        # Select by MATRIX_ANNOTATION VAL="medline"
+        # Select by PubMed ID(s) (MATRIX_ANNOTATION.TAG="medline")
         if medline:
             tables.append("MATRIX_ANNOTATION ma4")
             where_clauses.append("m.ID = ma4.ID")
 
             clause = "ma4.TAG = 'medline'"
             if isinstance(medline, list):
-                clause = "".join([clause, "ma4.VAL in ('"])
+                # A list of PubMed IDs
+                clause = "".join([clause, " and ma4.VAL in ('"])
                 clause = "".join([clause, "','".join(medline)])
                 clause = "".join([clause, "')"])
             else:
-                # A single tax ID
-                clause = "".join(["ma4.VAL = '%s' " % medline])
+                # A single PubMed ID
+                clause = "".join([" and ma4.VAL = '%s' " % medline])
 
             where_clauses.append(clause)
 
-        # Select by MATRIX_ANNOTATION VAL="type"
+        # Select by data type(s) used to compile the matrix
+        # (MATRIX_ANNOTATION.TAG="type")
         if data_type:
             tables.append("MATRIX_ANNOTATION ma5")
             where_clauses.append("m.ID = ma5.ID")
 
-            clause = "ma5.TAG = 'data_type'"
+            clause = "ma5.TAG = 'type'"
             if isinstance(data_type, list):
-                clause = "".join([clause, "ma5.VAL in ('"])
+                # A list of data types
+                clause = "".join([clause, " and ma5.VAL in ('"])
                 clause = "".join([clause, "','".join(data_type)])
                 clause = "".join([clause, "')"])
             else:
-                # A single tax ID
-                clause = "".join(["ma5.VAL = '%s' " % data_type])
+                # A single data type
+                clause = "".join([" and ma5.VAL = '%s' " % data_type])
 
             where_clauses.append(clause)
 
-        # Select by MATRIX_ANNOTATION VAL="tax_group"
+        # Select by taxonomic supergroup(s) (MATRIX_ANNOTATION.TAG="tax_group")
         if tax_group:
             tables.append("MATRIX_ANNOTATION ma6")
             where_clauses.append("m.ID = ma6.ID")
 
             clause = "ma6.TAG = 'tax_group'"
             if isinstance(tax_group, list):
+                # A list of tax IDs
                 clause = "".join([clause, " and ma6.VAL in ('"])
                 clause = "".join([clause, "','".join(tax_group)])
                 clause = "".join([clause, "')"])
@@ -622,8 +710,11 @@ class JASPAR5(object):
         return int_ids
 
     def _is_latest_version(self, int_id):
-        # Does this internal ID represened the latest version of the JASPAR
-        # matrix (collapse on base ids)
+        """
+        Does this internal ID represened the latest version of the JASPAR
+        matrix (collapse on base ids)
+
+        """
         cur = self.dbh.cursor()
 
         cur.execute("select count(*) from MATRIX where BASE_ID = (select BASE_ID from MATRIX where ID = %s) and VERSION > (select VERSION from MATRIX where ID = %s)", (int_id, int_id))
@@ -637,16 +728,3 @@ class JASPAR5(object):
             return(True)
 
         return(False)
-
-def _split_jaspar_id(id):
-    id_split = id.split('.')
-
-    base_id = None
-    version = None
-    if len(id_split) == 2:
-        base_id = id_split[0]
-        version = id_split[1]
-    else:
-        base_id = id
-
-    return (base_id, version)
