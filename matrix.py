@@ -118,7 +118,7 @@ class GenericPositionMatrix(dict):
             return d
         else:
             raise RuntimeError("Should not get here")
-
+        
     @property
     def consensus(self):
         """Returns the consensus sequence.
@@ -200,6 +200,21 @@ class GenericPositionMatrix(dict):
             sequence += nucleotide
         return Seq(sequence, alphabet = IUPAC.ambiguous_dna)
 
+    @property
+    def gc_content(self):
+        """
+Compute the fraction GC content.
+"""
+        alphabet = self.alphabet
+        gc_total = 0.0
+        total = 0.0
+        for i in xrange(self.length):
+            for letter in alphabet.letters:
+                if letter in 'CG':
+                    gc_total += self[letter][i]
+                total += self[letter][i]
+        return gc_total / total
+
     def reverse_complement(self):
         values = {}
         values["A"] = self["T"][::-1]
@@ -208,23 +223,6 @@ class GenericPositionMatrix(dict):
         values["C"] = self["G"][::-1]
         alphabet = self.alphabet
         return self.__class__(alphabet, values)
-
-    @property
-    def gc_content(self):
-        """
-        Compute the %GC content.
-        """
-        alphabet = self.alphabet
-        gc_total = 0
-        total = 0
-        for i in xrange(self.length):
-            for letter in alphabet.letters:
-                if letter == 'C' or letter == 'G':
-                    gc_total += self[letter][i]
-
-                total += self[letter][i]
-
-        return float(gc_total) / total
 
 
 class FrequencyPositionMatrix(GenericPositionMatrix):
@@ -402,7 +400,7 @@ class PositionSpecificScoringMatrix(GenericPositionMatrix):
 
     @property
     def gc_content(self):
-        raise Exception("Cannot compute the \%GC composition of a PSSM")
+        raise Exception("Cannot compute the %GC composition of a PSSM")
 
     def mean(self, background=None):
         """Expected value of the score of a motif."""
@@ -417,6 +415,8 @@ class PositionSpecificScoringMatrix(GenericPositionMatrix):
         for i in range(self.length):
             for letter in self._letters:
                 logodds = self[letter,i]
+                if math.isnan(logodds):
+                    continue
                 b = background[letter]
                 p = b * math.pow(2,logodds)
                 sx += p * logodds
@@ -437,6 +437,8 @@ class PositionSpecificScoringMatrix(GenericPositionMatrix):
             sxx = 0.0
             for letter in self._letters:
                 logodds = self[letter,i]
+                if math.isnan(logodds):
+                    continue
                 b = background[letter]
                 p = b * math.pow(2,logodds)
                 sx += p*logodds
