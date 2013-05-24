@@ -4,17 +4,17 @@ import re
 import math
 
 import sys
-#sys.path.append("/homed/home/dave/devel/biopython-1.61")
-sys.path.append("/home/anthony/PostDoc/JASPAR2013/Biopython_package/biopython-master/")
+sys.path.append("/homed/home/dave/devel/biopython_devel")
+#sys.path.append("/home/anthony/PostDoc/JASPAR2013/Biopython_package/biopython-master/")
 from Bio_dev import motifs
 
 
 class Motif(motifs.Motif):
     """
-    A subclass of Motif used in parsing JASPAR files.
-
-    Represents a JASPAR profile as a Motif with additional metadata information
-    if available
+    A subclass of Bio.motifs.Motif used to represent a JASPAR profile with
+    additional metadata information if available. The metadata availability
+    depends on the source of the JASPAR motif (a 'pfm' format file, a 'jaspar'
+    format file or a JASPAR database).
 
     """
     def __init__(self, matrix_id, name, alphabet=dna, instances=None,
@@ -27,9 +27,6 @@ class Motif(motifs.Motif):
         """
         motifs.Motif.__init__(self, alphabet, instances, counts)
         self.name = name
-        # TODO we may want to store the base ID and version in separate
-        # attributes or just provide methods to split/return the matrix ID
-        # into base_id and version
         self.matrix_id = matrix_id
         self.collection = collection
         self.tf_class = tf_class
@@ -43,6 +40,22 @@ class Motif(motifs.Motif):
         self.medline = medline
         self.pazar_id = pazar_id
         self.comment = comment
+
+    @property
+    def base_id(self):
+        """
+        Return the JASPAR base matrix ID
+        """
+        (base_id, version) = split_jaspar_id(self.matrix_id)
+        return base_id
+
+    @property
+    def version(self):
+        """
+        Return the JASPAR matrix version
+        """
+        (base_id, version) = split_jaspar_id(self.matrix_id)
+        return version
 
     def __str__(self):
         """
@@ -102,8 +115,9 @@ class Motif(motifs.Motif):
     def ic(self):
         """
         Compute the total information content.
-        XXX This really belongs in the base Motif class
-
+        XXX The PositionSpecificScoringMatrix.mean() methods provides the
+        same functionality but without pseudocounts it may return NaN and
+        possibly Inf/-Inf which is different than the perl TFBS modules.
         """
 
         pwm = self.pwm
@@ -304,3 +318,22 @@ def _read_jaspar(handle):
                 row_count = 0
 
     return record
+
+
+def split_jaspar_id(id):
+    """
+    Utility function to split a JASPAR matrix ID into it's component base ID
+    and version number, e.g. 'MA0047.2' is returned as ('MA0047', 2).
+    """
+
+    id_split = id.split('.')
+
+    base_id = None
+    version = None
+    if len(id_split) == 2:
+        base_id = id_split[0]
+        version = id_split[1]
+    else:
+        base_id = id
+
+    return (base_id, version)
